@@ -1,0 +1,12 @@
+target/
+*.log
+*.class
+*.iml
+.idea/
+.project
+.settings/
+.vscode/
+.DS_Store
+**/*.swp
+# Docker
+*.env
