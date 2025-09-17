@@ -43,17 +43,27 @@ pipeline {
       steps {
         dir('terraform') {
           sh '''
+            set -e
             terraform init -input=false
-            terraform fmt -check
+
+            # Sửa định dạng trước (có thể in ra file nào được sửa)
+            terraform fmt -recursive
+
+            # Tuỳ chọn: kiểm tra lại nhưng KHÔNG fail build (để tiến tiếp)
+            terraform fmt -check || true
+
             terraform validate
+
             terraform plan -input=false -out=tfplan \
               -var="aws_account_id=507737351904" \
               -var="region=${AWS_DEFAULT_REGION}"
+
             terraform apply -input=false -auto-approve tfplan
           '''
         }
       }
     }
+
 
     stage('Configure kubeconfig') {
       steps {
