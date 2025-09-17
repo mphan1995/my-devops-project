@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = merge(var.tags, { Name = "${local.name}-vpc" })
+  tags                 = merge(var.tags, { Name = "${local.name}-vpc" })
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -19,7 +19,7 @@ resource "aws_subnet" "public" {
   cidr_block              = each.value
   map_public_ip_on_launch = true
   availability_zone       = "${var.region}${substr(each.key, -1, 1)}" # đơn giản hoá
-  tags = merge(var.tags, { Name = "${local.name}-public-${replace(each.value, ".0/24", "")}" })
+  tags                    = merge(var.tags, { Name = "${local.name}-public-${replace(each.value, ".0/24", "")}" })
 }
 
 resource "aws_subnet" "private" {
@@ -27,7 +27,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value
   availability_zone = "${var.region}${substr(each.key, -1, 1)}"
-  tags = merge(var.tags, { Name = "${local.name}-private-${replace(each.value, ".0/24", "")}" })
+  tags              = merge(var.tags, { Name = "${local.name}-private-${replace(each.value, ".0/24", "")}" })
 }
 
 resource "aws_eip" "nat" { vpc = true }

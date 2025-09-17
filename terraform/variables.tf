@@ -35,7 +35,7 @@ variable "node_instance_types" {
 variable "tags" {
   type = map(string)
   default = {
-    Owner    = "Max Phan"
+    Owner     = "Max Phan"
     ManagedBy = "Terraform"
   }
 }
