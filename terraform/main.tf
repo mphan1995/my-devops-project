@@ -105,14 +105,18 @@ resource "aws_route_table_association" "private_assoc" {
 # EKS Cluster (managed node group)
 # ------------------------------
 module "eks" {
-  source          = "terraform-aws-modules/eks/aws"
-  version         = "~> 20.0"
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 20.0"
 
   cluster_name    = "${local.name}-eks"
   cluster_version = "1.29"
 
   vpc_id     = aws_vpc.main.id
   subnet_ids = [for s in aws_subnet.private : s.id]
+
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = true
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"] # hoặc chỉ IP Jenkins
 
   eks_managed_node_groups = {
     default = {
@@ -126,6 +130,7 @@ module "eks" {
   enable_irsa = true
   tags        = var.tags
 }
+
 
 # ------------------------------
 # ECR repo cho app
