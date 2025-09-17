@@ -1,16 +1,10 @@
 pipeline {
-  agent {
-    docker {
-      image 'my-devops-tools:latest'     // tên image bạn build từ Dockerfile trên
-      args  '-v /var/run/docker.sock:/var/run/docker.sock'
-      reuseNode true
-    }
-  }
+  agent any
 
   environment {
     AWS_DEFAULT_REGION = 'ap-southeast-1'
   }
-  
+
   options {
     timestamps()
     ansiColor('xterm')
@@ -23,22 +17,22 @@ pipeline {
 
     stage('Setup AWS & Tools') {
       steps {
-        // Nếu bạn tạo Secret Text id=aws-region, ta sẽ override
         withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
           withCredentials([[
             $class: 'AmazonWebServicesCredentialsBinding',
             credentialsId: 'aws-creds'
           ]]) {
             sh '''
-              # nếu REGION_OPT có giá trị thì override
               export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
-
               echo "Using AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
-              aws sts get-caller-identity
+
+              aws --version || true
               terraform -version || true
               kubectl version --client || true
               helm version || true
               ansible --version || true
+
+              aws sts get-caller-identity
             '''
           }
         }
