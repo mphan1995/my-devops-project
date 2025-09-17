@@ -2,8 +2,8 @@ pipeline {
   agent any
 
   environment {
-    AWS_DEFAULT_REGION = credentials('aws-region') ?: 'ap-southeast-1'
-    // Nếu không dùng credentials binding cho region, giữ default như trên
+    // luôn có giá trị hợp lệ
+    AWS_DEFAULT_REGION = 'ap-southeast-1'
   }
 
   options {
@@ -18,17 +18,24 @@ pipeline {
 
     stage('Setup AWS & Tools') {
       steps {
-        withCredentials([[
-          $class: 'AmazonWebServicesCredentialsBinding',
-          credentialsId: 'aws-creds'
-        ]]) {
-          sh '''
-            aws sts get-caller-identity
-            terraform -version || true
-            kubectl version --client || true
-            helm version || true
-            ansible --version || true
-          '''
+        // Nếu bạn tạo Secret Text id=aws-region, ta sẽ override
+        withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
+          withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds'
+          ]]) {
+            sh '''
+              # nếu REGION_OPT có giá trị thì override
+              export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
+
+              echo "Using AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+              aws sts get-caller-identity
+              terraform -version || true
+              kubectl version --client || true
+              helm version || true
+              ansible --version || true
+            '''
+          }
         }
       }
     }
@@ -61,7 +68,8 @@ pipeline {
     stage('Ansible Bootstrap') {
       steps {
         sh '''
-          ansible-galaxy install -r ansible/requirements.yml
+          ansible-galaxy collection install kubernetes.core community.kubernetes --force
+          ansible-galaxy install -r ansible/requirements.yml || true
           ansible-playbook -i ansible/inventory.ini ansible/playbooks/cluster_bootstrap.yml
         '''
       }
@@ -72,9 +80,9 @@ pipeline {
         sh '''
           source ./scripts/ecr_login.sh
           ECR_URI=$(terraform -chdir=terraform output -raw ecr_uri)
-          ./scripts/render_values.sh helm/myapp/values.yaml \
-            image.repository $ECR_URI/myapp
-          helm upgrade --install myapp helm/myapp -n myapp --create-namespace
+          ./scripts/render_values.sh helm/myapp/values.yaml image.repository "$ECR_URI/myapp"
+          helm upgrade --install myapp helm/myapp -n myapp --create-namespace \
+            --set image.tag=v0.1.0
         '''
       }
     }
