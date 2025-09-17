@@ -1,10 +1,17 @@
 pipeline {
-  agent any
+  agent {
+    docker {
+      image 'my-devops-tools:latest'     // tên image bạn build từ Dockerfile trên
+      args  '-v /var/run/docker.sock:/var/run/docker.sock'
+      reuseNode true
+    }
+  }
 
   environment {
-    // luôn có giá trị hợp lệ
     AWS_DEFAULT_REGION = 'ap-southeast-1'
   }
+  /* phần stages giữ nguyên như file bạn đang dùng */
+}
 
   options {
     timestamps()
