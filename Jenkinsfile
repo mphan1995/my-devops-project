@@ -41,29 +41,31 @@ pipeline {
 
     stage('Terraform Init/Plan/Apply') {
       steps {
-        dir('terraform') {
-          sh '''
-            set -e
-            terraform init -input=false
+        // Bind lại AWS creds + (optional) region secret
+        withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
+          withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds'
+          ]]) {
+            sh '''
+              export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
+              cd terraform
 
-            # Sửa định dạng trước (có thể in ra file nào được sửa)
-            terraform fmt -recursive
+              terraform init -input=false
+              terraform fmt -recursive
+              terraform fmt -check || true
+              terraform validate
 
-            # Tuỳ chọn: kiểm tra lại nhưng KHÔNG fail build (để tiến tiếp)
-            terraform fmt -check || true
+              terraform plan -input=false -out=tfplan \
+                -var="aws_account_id=507737351904" \
+                -var="region=${AWS_DEFAULT_REGION}"
 
-            terraform validate
-
-            terraform plan -input=false -out=tfplan \
-              -var="aws_account_id=507737351904" \
-              -var="region=${AWS_DEFAULT_REGION}"
-
-            terraform apply -input=false -auto-approve tfplan
-          '''
+              terraform apply -input=false -auto-approve tfplan
+            '''
+          }
         }
       }
     }
-
 
     stage('Configure kubeconfig') {
       steps {

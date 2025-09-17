@@ -30,7 +30,10 @@ resource "aws_subnet" "private" {
   tags              = merge(var.tags, { Name = "${local.name}-private-${replace(each.value, ".0/24", "")}" })
 }
 
-resource "aws_eip" "nat" { vpc = true }
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = var.tags
+}
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = values(aws_subnet.public)[0].id
