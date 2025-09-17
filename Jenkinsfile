@@ -70,22 +70,18 @@ pipeline {
     stage('Configure kubeconfig') {
       steps {
         withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
-          withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws-creds'
-          ]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
             sh '''
-              set -euxo pipefail
+              set -eu
               export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
 
-              # sửa CRLF nếu file từng được tạo trên Windows
+              # xử lý CRLF nếu có
               sed -i 's/\r$//' scripts/*.sh || true
 
-              # chạy script bằng bash (khỏi cần chmod +x)
+              # gọi bằng bash để tránh cần +x
               bash scripts/get_kubeconfig.sh
 
-              # kiểm tra kubeconfig
-              kubectl config current-context
+              kubectl config current-context || true
               kubectl get nodes
             '''
           }
