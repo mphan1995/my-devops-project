@@ -10,9 +10,7 @@ pipeline {
   environment {
     AWS_DEFAULT_REGION = 'ap-southeast-1'
   }
-  /* phần stages giữ nguyên như file bạn đang dùng */
-}
-
+  
   options {
     timestamps()
     ansiColor('xterm')
