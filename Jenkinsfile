@@ -69,12 +69,30 @@ pipeline {
 
     stage('Configure kubeconfig') {
       steps {
-        sh '''
-          ./scripts/get_kubeconfig.sh
-          kubectl get nodes
-        '''
+        withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
+          withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds'
+          ]]) {
+            sh '''
+              set -euxo pipefail
+              export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
+
+              # sửa CRLF nếu file từng được tạo trên Windows
+              sed -i 's/\r$//' scripts/*.sh || true
+
+              # chạy script bằng bash (khỏi cần chmod +x)
+              bash scripts/get_kubeconfig.sh
+
+              # kiểm tra kubeconfig
+              kubectl config current-context
+              kubectl get nodes
+            '''
+          }
+        }
       }
     }
+
 
     stage('Ansible Bootstrap') {
       steps {
