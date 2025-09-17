@@ -1,0 +1,5 @@
+---
+- name: Prepare app config
+  hosts: local
+  tasks:
+    - debug: msg="Add app-specific steps if needed"

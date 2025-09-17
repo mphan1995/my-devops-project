@@ -1,0 +1,33 @@
+---
+- name: Bootstrap EKS cluster (namespaces, secrets, metrics)
+  hosts: local
+  vars:
+    ns: myapp
+  tasks:
+    - name: Ensure namespace exists
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ ns }}"
+        state: present
+
+    - name: Install metrics-server (Helm)
+      community.kubernetes.helm:
+        name: metrics-server
+        chart_repo_url: https://kubernetes-sigs.github.io/metrics-server/
+        chart_ref: metrics-server
+        release_namespace: kube-system
+        state: present
+
+    - name: (Optional) Create docker-registry secret for ECR pull (will be auto via IRSA usually)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: ecr-pull
+            namespace: "{{ ns }}"
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: ""

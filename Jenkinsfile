@@ -1,10 +1,16 @@
+### `Jenkinsfile`
+```groovy
 pipeline {
   agent any
-  options { timestamps(); ansiColor('xterm') }
 
   environment {
-    REGISTRY = "localhost:5000"     // dùng local registry để test nhanh
-    IMAGE    = "myapp"
+    AWS_DEFAULT_REGION = credentials('aws-region') ?: 'ap-southeast-1'
+    // Nếu không dùng credentials binding cho region, giữ default như trên
+  }
+
+  options {
+    timestamps()
+    ansiColor('xterm')
   }
 
   stages {
@@ -12,53 +18,74 @@ pipeline {
       steps { checkout scm }
     }
 
-    stage('Build') {
-      steps { sh "mvn -B clean package -DskipTests" }
-    }
-
-    stage('Test') {
+    stage('Setup AWS & Tools') {
       steps {
-        sh "mvn -B test"
-        junit 'target/surefire-reports/*.xml'
-      }
-    }
-
-    stage('Docker Build & Tag') {
-      steps {
-        script {
-          def sha = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
-          sh """
-            docker build -t ${env.REGISTRY}/${env.IMAGE}:${sha} .
-            docker tag ${env.REGISTRY}/${env.IMAGE}:${sha} ${env.REGISTRY}/${env.IMAGE}:latest
-          """
-          env.BUILD_TAGGED = sha
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: 'aws-creds'
+        ]]) {
+          sh '''
+            aws sts get-caller-identity
+            terraform -version || true
+            kubectl version --client || true
+            helm version || true
+            ansible --version || true
+          '''
         }
       }
     }
 
-    stage('Push Image') {
+    stage('Terraform Init/Plan/Apply') {
       steps {
-        // Local registry 5000 mặc định không cần login (nếu đánh dấu insecure – xem bước 5)
-        sh """
-          docker push ${env.REGISTRY}/${env.IMAGE}:${env.BUILD_TAGGED}
-          docker push ${env.REGISTRY}/${env.IMAGE}:latest
-        """
+        dir('terraform') {
+          sh '''
+            terraform init -input=false
+            terraform fmt -check
+            terraform validate
+            terraform plan -input=false -out=tfplan \
+              -var="aws_account_id=507737351904" \
+              -var="region=${AWS_DEFAULT_REGION}"
+            terraform apply -input=false -auto-approve tfplan
+          '''
+        }
       }
     }
 
-    stage('Deploy to Staging') {
-      when { branch 'main' }
-      environment {
-        TAG = "latest"
-      }
+    stage('Configure kubeconfig') {
       steps {
-        sh "REGISTRY=${env.REGISTRY} IMAGE=${env.IMAGE} TAG=${TAG} bash deploy/staging-deploy.sh"
+        sh '''
+          ./scripts/get_kubeconfig.sh
+          kubectl get nodes
+        '''
+      }
+    }
+
+    stage('Ansible Bootstrap') {
+      steps {
+        sh '''
+          ansible-galaxy install -r ansible/requirements.yml
+          ansible-playbook -i ansible/inventory.ini ansible/playbooks/cluster_bootstrap.yml
+        '''
+      }
+    }
+
+    stage('Helm Deploy App') {
+      steps {
+        sh '''
+          source ./scripts/ecr_login.sh
+          ECR_URI=$(terraform -chdir=terraform output -raw ecr_uri)
+          ./scripts/render_values.sh helm/myapp/values.yaml \
+            image.repository $ECR_URI/myapp
+          helm upgrade --install myapp helm/myapp -n myapp --create-namespace
+        '''
       }
     }
   }
 
   post {
-    success { echo "Build the URL success: ${env.BUILD_URL}" }
-    failure { echo "Build failed! ${env.BUILD_URL}" }
+    always {
+      sh 'kubectl -n myapp get pods || true'
+      archiveArtifacts artifacts: 'terraform/*.tfstate*', fingerprint: true, onlyIfSuccessful: false
+    }
   }
 }

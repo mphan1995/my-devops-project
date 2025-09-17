@@ -1,0 +1,5 @@
+apiVersion: v2
+name: myapp
+version: 0.1.0
+appVersion: "0.1.0"
+description: Simple k8s app deployed via Helm
