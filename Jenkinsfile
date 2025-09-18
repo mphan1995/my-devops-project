@@ -69,49 +69,53 @@ pipeline {
 
     stage('Configure kubeconfig') {
       environment {
-        KUBECONFIG = "${env.WORKSPACE}/kubeconfig"   // luôn dùng file trong workspace
-        CLUSTER_NAME = "my-devops-project-eks"       // hoặc lấy từ params/credentials
+        KUBECONFIG   = "${env.WORKSPACE}/kubeconfig"
+        CLUSTER_NAME = "my-devops-project-eks"
       }
       steps {
-        withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-            sh '''
-              set -eu
+        withCredentials([
+          string(credentialsId: 'aws-region', variable: 'REGION_OPT'),
+          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds'] // đây là user/role có quyền AssumeRole sang jenkins-eks-admin
+        ]) {
+          sh '''
+            set -eu
+            export AWS_DEFAULT_REGION="${REGION_OPT:-${AWS_DEFAULT_REGION:-ap-southeast-1}}"
 
-              # Region
-              export AWS_DEFAULT_REGION="${REGION_OPT:-${AWS_DEFAULT_REGION:-ap-southeast-1}}"
+            sed -i 's/\\r$//' scripts/*.sh || true
+            aws --version
+            kubectl version --client=true || true
 
-              # Chống CRLF khi checkout từ Windows
-              sed -i 's/\\r$//' scripts/*.sh || true
+            echo "== AWS identity (before assume) =="
+            aws sts get-caller-identity
 
-              # Kiểm tra SDK & kubectl có sẵn
-              aws --version
-              kubectl version --client=true || true
+            # Lấy STS credentials khi assume sang role đã được cấp access vào EKS
+            CREDS_JSON=$(aws sts assume-role \
+              --role-arn "arn:aws:iam::507737351904:role/jenkins-eks-admin" \
+              --role-session-name "jenkins-eks-admin-session")
 
-              # (Tuỳ chọn) Kiểm tra identity Jenkins đang dùng
-              echo "== AWS identity =="
-              aws sts get-caller-identity
+            export AWS_ACCESS_KEY_ID=$(echo "$CREDS_JSON" | jq -r .Credentials.AccessKeyId)
+            export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS_JSON" | jq -r .Credentials.SecretAccessKey)
+            export AWS_SESSION_TOKEN=$(echo "$CREDS_JSON" | jq -r .Credentials.SessionToken)
 
-              # Viết kubeconfig vào $KUBECONFIG (không đụng tới ~/.kube/config trên agent)
-              # Nếu cần cross-account/role khác, thêm --role-arn "arn:aws:iam::<acct>:role/<RoleMappedInAwsAuth>"
-              aws eks update-kubeconfig \
-                --name "${CLUSTER_NAME}" \
-                --region "${AWS_DEFAULT_REGION}" \
-                --kubeconfig "${KUBECONFIG}" \
-                --alias "${CLUSTER_NAME}"
+            echo "== AWS identity (assumed) =="
+            aws sts get-caller-identity
 
-              # Nếu bạn cần ép dùng role đã được map trong aws-auth:
-              # aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_DEFAULT_REGION}" \
-              #   --kubeconfig "${KUBECONFIG}" --alias "${CLUSTER_NAME}" \
-              #   --role-arn "arn:aws:iam::<account-id>:role/<eks-access-role>"
+            # Viết kubeconfig với role vừa assume
+            aws eks update-kubeconfig \
+              --name "${CLUSTER_NAME}" \
+              --region "${AWS_DEFAULT_REGION}" \
+              --kubeconfig "${KUBECONFIG}" \
+              --alias "${CLUSTER_NAME}"
 
-              echo "== Current context =="
-              kubectl config current-context || true
+            # Sanity check: có lấy được token không
+            aws eks get-token --cluster-name "${CLUSTER_NAME}" --region "${AWS_DEFAULT_REGION}" >/dev/null
 
-              echo "== Cluster nodes =="
-              kubectl get nodes
-            '''
-          }
+            echo "== Current context ==" 
+            kubectl --kubeconfig "${KUBECONFIG}" config current-context
+
+            echo "== Cluster nodes ==" 
+            kubectl --kubeconfig "${KUBECONFIG}" get nodes
+          '''
         }
       }
     }
