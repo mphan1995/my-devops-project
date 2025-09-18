@@ -1,12 +1,48 @@
-target/
-*.log
-*.class
-*.iml
+# OS/system
+.DS_Store
+Thumbs.db
+**/*.swp
+
+# IDE
 .idea/
+.vscode/
 .project
 .settings/
-.vscode/
-.DS_Store
-**/*.swp
-# Docker
+*.iml
+*.class
+target/
+*.log
+
+# Docker / Env
 *.env
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+tfplan
+*.out
+
+# Ansible
+*.retry
+
+# Helm
+helmfile.lock
+
+# Python (nếu có ansible/py scripts)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# Jenkins
+workspace/
+builds/
