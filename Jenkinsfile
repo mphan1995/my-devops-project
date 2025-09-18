@@ -39,6 +39,32 @@ pipeline {
       }
     }
 
+    parameters {
+      booleanParam(name: 'DESTROY', defaultValue: false, description: 'Destroy all resources first')
+    }
+    stage('Terraform Destroy (manual)') {
+      when { expression { return params.DESTROY == true } }
+      steps {
+        withCredentials([string(credentialsId: 'aws-region', variable: 'REGION_OPT')]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            sh '''
+              set -e
+              export AWS_DEFAULT_REGION="${REGION_OPT:-$AWS_DEFAULT_REGION}"
+              cd terraform
+              terraform init -input=false
+
+              # ECR có thể chặn destroy nếu còn image -> xoá cưỡng bức trước (không lỗi cũng OK)
+              aws ecr delete-repository --repository-name myapp --force --region "$AWS_DEFAULT_REGION" || true
+
+              terraform destroy -auto-approve \
+                -var="aws_account_id=507737351904" \
+                -var="region=$AWS_DEFAULT_REGION"
+            '''
+          }
+        }
+      }
+    }
+
     stage('Terraform Init/Plan/Apply') {
       steps {
         // Bind lại AWS creds + (optional) region secret

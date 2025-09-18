@@ -1,5 +1,5 @@
 provider "aws" {
   region = var.region
+  # KHÔNG cần profile/assume-role – Jenkins đã inject ACCESS_KEY/SECRET
 }
 
-# Kubernetes provider sẽ được cấu hình sau khi EKS tạo xong (dùng data aws_eks_cluster)

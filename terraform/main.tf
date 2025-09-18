@@ -114,9 +114,10 @@ module "eks" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = [for s in aws_subnet.private : s.id]
 
+  # Cho phép API public (có thể siết CIDR chỉ IP Jenkins)
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
-  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"] # hoặc chỉ IP Jenkins
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
 
   eks_managed_node_groups = {
     default = {
@@ -129,7 +130,20 @@ module "eks" {
 
   enable_irsa = true
   tags        = var.tags
+
+  access_entries = {
+    jenkins_bot = {
+      principal_arn = "arn:aws:iam::507737351904:user/jenkins-bot"
+      policy_associations = {
+        admin = {
+          policy_arn  = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
 }
+
 
 
 # ------------------------------
